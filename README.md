@@ -1,36 +1,35 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# llm-pipeline
 
-## Getting Started
+A project that uses:
 
-First, run the development server:
+- d3 in canvas
+- markdown in HTML
+- next.js
+- Roboto Condensed font
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## behavior
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- shows markdown editor (and renderer) in HTML
+- surrounds the text with rounded rect with Title in canvas d3: text becomes a node
+- when a new node is created: a title is created with a nice random name. it becomes a variable for the whole diagram (should not have spaces because it enters lisp formulae - do not admit spaces in titles at edit time)
+- the nodes connect by edges (curves) like the SVG: "m84,159.5c126,3 118,80 226,84"
+- the background is pannable, zoomable at mouse pos
+- the nodes are draggable, selectable
+- pan, zoon, drag have sync effects in both canvas and HTML divs. at a certain threshhold of zoom (where text is unreadable): the whole node becomes the title
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## types
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- the overall type of a diagram is JSON 5
+- a JSON atom can be:
+  - a Markdown text: it it begins with a letter or # or - or *, etc.
+  - a number in decimal: if it begins with a digit or . and it can be parsed whole into a float
+  - hexadecimal: 0x
+  - a boolean: if it is true, false
+  - a lisp function: if it begins with ( and ends with )
+- a JSON container can be:
+  - an array: if it begins with [ and ends with ]
+  - an object/diagram: if it begins with { and ends with}
 
-## Learn More
+## location live
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+http://localhost:3000/
