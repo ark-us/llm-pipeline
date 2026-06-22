@@ -13,6 +13,7 @@ import { copyText } from '@/lib/clipboard'
 import {
   classifyPipelineSource,
   evaluatePipelineExpression,
+  evaluatePromptCall,
   inferPipelineValue,
   LispValue,
   pipelineValueToJson,
@@ -366,6 +367,17 @@ function evaluateGraphNodes(graphNodes: GraphNode[]) {
         dependencyTitles.set(node.id, new Set())
         return value
       }
+      const promptCall = evaluatePromptCall(expression, (name) => {
+        const dependency = byTitle.get(name)
+        if (!dependency) throw new Error(`'${name}' not found`)
+        return evaluateNode(dependency)
+      })
+      if (promptCall) {
+        const value = inferPipelineValue(node.markdown)
+        values.set(node.id, value)
+        dependencyTitles.set(node.id, promptCall.dependencies)
+        return value
+      }
       const result = evaluatePipelineExpression(expression, (name) => {
         const dependency = byTitle.get(name)
         if (!dependency) throw new Error(`'${name}' not found`)
@@ -400,6 +412,23 @@ function evaluateGraphNodes(graphNodes: GraphNode[]) {
   return { values, errors, edges, dependencyTitles }
 }
 
+function promptCallForNode(
+  node: GraphNode,
+  graphNodes: GraphNode[],
+  values: Map<string, LispValue>,
+) {
+  const byTitle = new Map(graphNodes.map((candidate) => [candidate.title, candidate]))
+  return evaluatePromptCall(nodeExpression(node), (name) => {
+    const dependency = byTitle.get(name)
+    if (!dependency) throw new Error(`'${name}' not found`)
+    return values.get(dependency.id) ?? inferPipelineValue(dependency.markdown)
+  })
+}
+
+function hasPromptFormula(node: GraphNode | null) {
+  return Boolean(node && /^\(\s*prompt\s+/.test(nodeExpression(node)))
+}
+
 export default function CanvasBoard() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const boardRef = useRef<HTMLDivElement>(null)
@@ -427,6 +456,11 @@ export default function CanvasBoard() {
     id: string
   } | null>(null)
   const [nestedParentMetadata, setNestedParentMetadata] = useState<DiagramMetadata | null>(null)
+  const [promptRun, setPromptRun] = useState<{
+    key: string
+    status: 'running' | 'login_required' | 'error'
+    message?: string
+  } | null>(null)
   const evaluations = useMemo(() => evaluateGraphNodes(nodes), [nodes])
   const edges = evaluations.edges
   const selectedError = selectedId ? evaluations.errors.get(selectedId) : undefined
@@ -901,6 +935,62 @@ export default function CanvasBoard() {
       formulaEditorRef.current?.setSelection(cursor)
     })
     return true
+  }
+
+  async function runPromptNode(
+    node: GraphNode,
+    level: number | null,
+    graphNodes: GraphNode[],
+    values: Map<string, LispValue>,
+  ) {
+    const key = `${level ?? 'root'}:${node.id}`
+    try {
+      const call = promptCallForNode(node, graphNodes, values)
+      if (!call) throw new Error('formula must be (prompt chatgpt <string>)')
+      if (call.engine !== 'chatgpt') throw new Error(`unsupported prompt engine '${call.engine}'`)
+      setPromptRun({ key, status: 'running' })
+      const response = await fetch('/api/prompt', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ engine: call.engine, prompt: call.prompt }),
+      })
+      const result = await response.json() as {
+        status?: string
+        text?: string
+        message?: string
+        error?: string
+      }
+      if (response.status === 409 && result.status === 'login_required') {
+        setPromptRun({
+          key,
+          status: 'login_required',
+          message: result.message,
+        })
+        return
+      }
+      if (!response.ok || typeof result.text !== 'string') {
+        throw new Error(result.error ?? 'ChatGPT prompt failed')
+      }
+      if (level === null) {
+        updateNode(node.id, { markdown: result.text })
+      } else {
+        setParents((current) => current.map((parent, index) =>
+          index === level
+            ? {
+                ...parent,
+                nodes: parent.nodes.map((candidate) =>
+                  candidate.id === node.id ? { ...candidate, markdown: result.text! } : candidate),
+              }
+            : parent))
+      }
+      setPromptRun(null)
+    } catch (error) {
+      setPromptRun({
+        key,
+        status: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   const expandedJsonNode = expandedJsonNodeId
@@ -1503,6 +1593,32 @@ export default function CanvasBoard() {
               }}
               label={`Edit ${selectedNode.title} formula`}
             />
+            {hasPromptFormula(selectedNode) && (
+              <div className="prompt-run-panel">
+                <button
+                  type="button"
+                  className="prompt-run-button"
+                  disabled={promptRun?.key === `root:${selectedNode.id}`
+                    && promptRun.status === 'running'}
+                  onClick={() => void runPromptNode(
+                    selectedNode,
+                    null,
+                    nodes,
+                    evaluations.values,
+                  )}
+                >
+                  {promptRun?.key === `root:${selectedNode.id}`
+                    && promptRun.status === 'running'
+                    ? 'Running…'
+                    : 'Run prompt'}
+                </button>
+                {promptRun?.key === `root:${selectedNode.id}` && promptRun.message && (
+                  <span className={`prompt-run-status is-${promptRun.status}`}>
+                    {promptRun.message}
+                  </span>
+                )}
+              </div>
+            )}
             {editorMode(
               nodeExpression(selectedNode)
                 ? printPipelineValue(evaluations.values.get(selectedNode.id) ?? null)
@@ -1588,6 +1704,33 @@ export default function CanvasBoard() {
               }}
               label={`Edit ${activeParentSelectedNode.title} formula`}
             />
+            {hasPromptFormula(activeParentSelectedNode) && (
+              <div className="prompt-run-panel">
+                <button
+                  type="button"
+                  className="prompt-run-button"
+                  disabled={promptRun?.key === `${activeParentIndex}:${activeParentSelectedNode.id}`
+                    && promptRun.status === 'running'}
+                  onClick={() => void runPromptNode(
+                    activeParentSelectedNode,
+                    activeParentIndex,
+                    activeParentEvaluationNodes,
+                    activeParentEvaluations.values,
+                  )}
+                >
+                  {promptRun?.key === `${activeParentIndex}:${activeParentSelectedNode.id}`
+                    && promptRun.status === 'running'
+                    ? 'Running…'
+                    : 'Run prompt'}
+                </button>
+                {promptRun?.key === `${activeParentIndex}:${activeParentSelectedNode.id}`
+                  && promptRun.message && (
+                  <span className={`prompt-run-status is-${promptRun.status}`}>
+                    {promptRun.message}
+                  </span>
+                )}
+              </div>
+            )}
             <div className="inspector-actions">
               <button
                 type="button"

@@ -56,6 +56,12 @@ export type EvaluationResult = {
   dependencies: Set<string>
 }
 
+export type PromptCall = {
+  engine: string
+  prompt: string
+  dependencies: Set<string>
+}
+
 export type PipelineSourceType =
   | 'markdown'
   | 'decimal'
@@ -419,4 +425,19 @@ export function evaluatePipelineExpression(
   }
 
   return { value: evaluate(read(source)), dependencies }
+}
+
+export function evaluatePromptCall(
+  source: string,
+  resolveSymbol: (name: string) => LispValue,
+): PromptCall | null {
+  const match = source.trim().match(/^\(\s*prompt\s+([^\s()[\]{}]+)\s+([\s\S]+)\)$/)
+  if (!match) return null
+  const [, engine, promptForm] = match
+  const result = evaluatePipelineExpression(`(str ${promptForm})`, resolveSymbol)
+  return {
+    engine,
+    prompt: printPipelineValue(result.value),
+    dependencies: result.dependencies,
+  }
 }

@@ -961,6 +961,37 @@ button {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+.prompt-run-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.prompt-run-button {
+  justify-self: start;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 8px 13px;
+  color: white;
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.prompt-run-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.prompt-run-status {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.prompt-run-status.is-error {
+  color: var(--danger);
+}
+
 .inspector-actions {
   display: flex;
   justify-content: flex-end;
