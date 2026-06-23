@@ -41,6 +41,43 @@ function MermaidDiagram({ source }: { source: string }) {
     : <div ref={hostRef} className="mermaid-diagram" />
 }
 
+function Base64Image({ label, source }: { label: string; source: string }) {
+  const [failedSource, setFailedSource] = useState('')
+  const normalizedSource = source.trim().replace(
+    /^(data:image\/[a-z0-9.+-]+;base64,)([\s\S]*)$/i,
+    (_, prefix: string, payload: string) => `${prefix}${payload.replace(/\s+/g, '')}`,
+  )
+
+  if (!/^data:image\/[a-z0-9.+-]+;base64,/i.test(normalizedSource)) {
+    return (
+      <pre className="fenced-content-error">
+        Image content must be a base64 data:image URL.
+      </pre>
+    )
+  }
+
+  if (failedSource === normalizedSource) {
+    return (
+      <pre className="fenced-content-error">
+        The base64 data is not a valid decodable image.
+      </pre>
+    )
+  }
+
+  return (
+    <div className="fenced-image-stage">
+      {/* The source is an explicit user-provided data URL, so Next image optimization is not applicable. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={normalizedSource}
+        alt={label}
+        onLoad={() => setFailedSource('')}
+        onError={() => setFailedSource(normalizedSource)}
+      />
+    </div>
+  )
+}
+
 export default function FencedContentView({
   label,
   value,
@@ -63,14 +100,8 @@ export default function FencedContentView({
         />
       ) : value.kind === 'mermaid' ? (
         <MermaidDiagram source={value.content} />
-      ) : /^data:image\/[a-z0-9.+-]+;base64,/i.test(value.content.trim()) ? (
-        // The source is an explicit user-provided data URL, so Next image optimization is not applicable.
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={value.content.trim()} alt="" />
       ) : (
-        <pre className="fenced-content-error">
-          Image content must be a base64 data:image URL.
-        </pre>
+        <Base64Image label={label} source={value.content} />
       )}
       {onChange && (
         <button
