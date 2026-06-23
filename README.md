@@ -59,8 +59,13 @@ export and deploys it whenever `main` is pushed.
 
 1. Create a GitHub repository and push this project.
 2. In the repository, open **Settings → Pages**.
-3. Set **Source** to **GitHub Actions**.
-4. Push `main` or run the **Deploy GitHub Pages** workflow manually.
+3. Under **Build and deployment**, set **Source** to **GitHub Actions**. This one-time
+   repository setting creates/enables the Pages site.
+4. Push `main` or rerun the failed **Deploy GitHub Pages** workflow.
+
+The workflow intentionally does not call `actions/configure-pages`: that action cannot enable
+a new Pages site with the normal workflow `GITHUB_TOKEN`. Automatic first-time enablement
+would require storing a separate personal access token with Pages write permission.
 
 The build derives the correct base path from `GITHUB_REPOSITORY`, so both project sites
 (`https://OWNER.github.io/REPOSITORY/`) and user sites (`https://OWNER.github.io/`) work.

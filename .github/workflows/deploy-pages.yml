@@ -34,9 +34,6 @@ jobs:
       - name: Build static site
         run: npm run build:pages
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v6
-
       - name: Upload static site
         uses: actions/upload-pages-artifact@v5
         with:
