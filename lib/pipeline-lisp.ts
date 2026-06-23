@@ -1,5 +1,6 @@
 import { isFencedCsvText, parseCsv } from './csv'
 import { parsePipelineJson5 } from './pipeline-json5'
+import { parseFencedContent } from './fenced-content'
 
 export type LispSequence = {
   kind: 'sequence'
@@ -69,6 +70,8 @@ export type PipelineSourceType =
   | 'boolean'
   | 'lisp'
   | 'csv'
+  | 'mermaid'
+  | 'image'
   | 'array'
   | 'object'
 
@@ -216,6 +219,8 @@ export function isPipelineExpression(source: string) {
 
 export function classifyPipelineSource(source: string): PipelineSourceType {
   const value = source.trim()
+  const fenced = parseFencedContent(value)
+  if (fenced) return fenced.kind
   if (value.startsWith('{') && value.endsWith('}')) {
     try {
       const parsed = parsePipelineJson5(value)

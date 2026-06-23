@@ -23,9 +23,15 @@ export default function CsvSpreadsheet({
   const table = useMemo(() => parseCsv(value), [value])
   const [page, setPage] = useState(0)
   const [showSource, setShowSource] = useState(false)
-  const pageCount = Math.max(1, Math.ceil(table.rows.length / PAGE_SIZE))
+  const displayedRowCount = table.rows.length + (onChange ? 1 : 0)
+  const pageCount = Math.max(1, Math.ceil(displayedRowCount / PAGE_SIZE))
   const safePage = Math.min(page, pageCount - 1)
-  const rows = table.rows.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE)
+  const pageStart = safePage * PAGE_SIZE
+  const rows = Array.from(
+    { length: Math.min(PAGE_SIZE, Math.max(0, displayedRowCount - pageStart)) },
+    (_, index) => table.rows[pageStart + index]
+      ?? table.headers.map(() => ''),
+  )
 
   function updateCell(rowIndex: number, columnIndex: number, nextValue: string) {
     if (!onChange) return
@@ -33,7 +39,11 @@ export default function CsvSpreadsheet({
       headers: table.headers,
       rows: table.rows.map((row) => [...row]),
     }
-    next.rows[safePage * PAGE_SIZE + rowIndex][columnIndex] = nextValue
+    const absoluteIndex = safePage * PAGE_SIZE + rowIndex
+    while (next.rows.length <= absoluteIndex) {
+      next.rows.push(table.headers.map(() => ''))
+    }
+    next.rows[absoluteIndex][columnIndex] = nextValue
     onChange(stringifyCsvValue(value, next))
   }
 

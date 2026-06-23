@@ -24,6 +24,7 @@ import JsonGraphDiagram, { DiagramMetadata } from './JsonGraphDiagram'
 import MarkdownLiveEditor from './MarkdownLiveEditor'
 import CsvSpreadsheet from './CsvSpreadsheet'
 import FormulaEditor, { FormulaEditorHandle } from './FormulaEditor'
+import FencedContentView from './FencedContentView'
 import SettingsOverlay, {
   AppSettings,
 } from './SettingsOverlay'
@@ -38,6 +39,7 @@ import {
   checkPlaywrightSession,
   runConfiguredPrompt,
 } from '@/lib/ai-client'
+import { parseFencedContent } from '@/lib/fenced-content'
 
 type GraphNode = {
   id: string
@@ -353,6 +355,15 @@ function displayedHeight(node: GraphNode, scale: number) {
 }
 
 function editorMode(value: string): 'markdown' | 'json' | 'json5' {
+  const structuralIntent = value.trimStart()
+  if (structuralIntent.startsWith('{') || structuralIntent.startsWith('[')) {
+    try {
+      JSON.parse(value)
+      return 'json'
+    } catch {
+      return 'json5'
+    }
+  }
   const type = classifyPipelineSource(value)
   if (type !== 'object' && type !== 'array') return 'markdown'
   const trimmed = value.trim()
@@ -1330,6 +1341,7 @@ export default function CanvasBoard() {
         : printPipelineValue(evaluations.values.get(node.id) ?? null)
       : node.markdown
     const displayedType = classifyPipelineSource(displayedValue)
+    const fencedContent = parseFencedContent(displayedValue)
     return {
       id: node.id,
       title: node.title,
@@ -1343,6 +1355,19 @@ export default function CanvasBoard() {
           label={`${node.title} CSV spreadsheet`}
           value={displayedValue}
           pathPrefix={node.title}
+          onChange={!expression
+            ? (markdown) => updateNode(node.id, { markdown })
+            : undefined}
+          onFocus={() => {
+            if (formulaOwnerRef.current?.level === null
+              && formulaOwnerRef.current.id !== node.id) return
+            selectNode(node.id)
+          }}
+        />
+      ) : fencedContent?.kind === 'mermaid' || fencedContent?.kind === 'image' ? (
+        <FencedContentView
+          label={`${node.title} ${fencedContent.kind}`}
+          value={fencedContent}
           onChange={!expression
             ? (markdown) => updateNode(node.id, { markdown })
             : undefined}
@@ -1539,6 +1564,7 @@ export default function CanvasBoard() {
           : printPipelineValue(activeParentEvaluations.values.get(node.id) ?? null)
         : node.markdown
       const displayedType = classifyPipelineSource(displayedValue)
+      const fencedContent = parseFencedContent(displayedValue)
       return {
       id: node.id,
       title: node.title,
@@ -1552,6 +1578,28 @@ export default function CanvasBoard() {
           label={`${node.title} CSV spreadsheet`}
           value={displayedValue}
           pathPrefix={node.title}
+          onChange={!expression && activeParentIndex !== null
+            ? (markdown) => setParents((current) => current.map((parent, index) =>
+                index === activeParentIndex
+                  ? {
+                      ...parent,
+                      nodes: parent.nodes.map((candidate) =>
+                        candidate.id === node.id ? { ...candidate, markdown } : candidate),
+                    }
+                  : parent))
+            : undefined}
+          onFocus={() => {
+            if (activeParentIndex === null) return
+            if (formulaOwnerRef.current?.level === activeParentIndex
+              && formulaOwnerRef.current.id !== node.id) return
+            setParents((current) => current.map((parent, index) =>
+              index === activeParentIndex ? { ...parent, selectedId: node.id } : parent))
+          }}
+        />
+      ) : fencedContent?.kind === 'mermaid' || fencedContent?.kind === 'image' ? (
+        <FencedContentView
+          label={`${node.title} ${fencedContent.kind}`}
+          value={fencedContent}
           onChange={!expression && activeParentIndex !== null
             ? (markdown) => setParents((current) => current.map((parent, index) =>
                 index === activeParentIndex

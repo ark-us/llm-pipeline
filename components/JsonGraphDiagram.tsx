@@ -10,6 +10,8 @@ import DiagramSurface, {
 } from './DiagramSurface'
 import MarkdownLiveEditor from './MarkdownLiveEditor'
 import CsvSpreadsheet from './CsvSpreadsheet'
+import FencedContentView from './FencedContentView'
+import { parseFencedContent } from '@/lib/fenced-content'
 
 export type DiagramMetadata = {
   name: string
@@ -103,7 +105,9 @@ export default function JsonGraphDiagram({
     }
     const fullPath = [...path, key].join('.')
     const referencePath = [...path, key].join('.')
-    const csv = typeof entry === 'string' && isCsvText(entry)
+    const fenced = typeof entry === 'string' ? parseFencedContent(entry) : null
+    const csv = typeof entry === 'string'
+      && (fenced?.kind === 'csv' || isCsvText(entry))
     return {
       id: key,
       title: key,
@@ -127,6 +131,21 @@ export default function JsonGraphDiagram({
             if (!onReferenceSelect?.(referencePath)) setSelectedId(key)
           }}
           pathPrefix={referencePath}
+        />
+      ) : fenced?.kind === 'mermaid' || fenced?.kind === 'image' ? (
+        <FencedContentView
+          label={`${key} ${fenced.kind}`}
+          value={fenced}
+          onChange={onChange ? (nextValue) => {
+            const clone = structuredClone(root)
+            let container = clone
+            for (const segment of path) container = container[segment] as Record<string, unknown>
+            container[key] = nextValue
+            onChange(stringify(clone))
+          } : undefined}
+          onFocus={() => {
+            if (!onReferenceSelect?.(referencePath)) setSelectedId(key)
+          }}
         />
       ) : (
         <MarkdownLiveEditor

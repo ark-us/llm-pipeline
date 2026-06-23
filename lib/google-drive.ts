@@ -5,14 +5,21 @@ export const GOOGLE_DRIVE_SCOPE = [
   'https://www.googleapis.com/auth/userinfo.email',
 ].join(' ')
 
+const GOOGLE_DRIVE_SCOPES = GOOGLE_DRIVE_SCOPE.split(' ')
+
 type GoogleTokenResponse = {
   access_token?: string
+  scope?: string
   error?: string
   error_description?: string
 }
 
 type GoogleTokenClient = {
-  requestAccessToken: (config?: { prompt?: string }) => void
+  requestAccessToken: (config?: {
+    scope?: string
+    prompt?: string
+    include_granted_scopes?: boolean
+  }) => void
 }
 
 declare global {
@@ -23,9 +30,15 @@ declare global {
           initTokenClient: (config: {
             client_id: string
             scope: string
+            include_granted_scopes?: boolean
             callback: (response: GoogleTokenResponse) => void
             error_callback?: (error: { type?: string; message?: string }) => void
           }) => GoogleTokenClient
+          hasGrantedAllScopes: (
+            response: GoogleTokenResponse,
+            firstScope: string,
+            ...restScopes: string[]
+          ) => boolean
           revoke: (token: string, callback: () => void) => void
         }
       }
@@ -62,15 +75,34 @@ export async function requestGoogleDriveToken(clientId: string) {
     const client = window.google!.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: GOOGLE_DRIVE_SCOPE,
+      include_granted_scopes: false,
       callback: (response) => {
-        if (response.access_token) resolve(response.access_token)
-        else reject(new Error(response.error_description ?? response.error ?? 'Google login failed'))
+        if (!response.access_token) {
+          reject(new Error(response.error_description ?? response.error ?? 'Google login failed'))
+          return
+        }
+        const [firstScope, ...restScopes] = GOOGLE_DRIVE_SCOPES
+        if (!window.google!.accounts.oauth2.hasGrantedAllScopes(
+          response,
+          firstScope,
+          ...restScopes,
+        )) {
+          reject(new Error(
+            'Google Drive permission was not granted. Reconnect and allow the app to create and update its Drive files.',
+          ))
+          return
+        }
+        resolve(response.access_token)
       },
       error_callback: (error) => {
         reject(new Error(error.message ?? error.type ?? 'Google login was closed'))
       },
     })
-    client.requestAccessToken({ prompt: '' })
+    client.requestAccessToken({
+      scope: GOOGLE_DRIVE_SCOPE,
+      prompt: 'consent select_account',
+      include_granted_scopes: false,
+    })
   })
 }
 

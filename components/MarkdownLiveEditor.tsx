@@ -397,15 +397,13 @@ export default function MarkdownLiveEditor({
     view.dispatch({
       effects: modeCompartmentRef.current.reconfigure(editorModeExtensions(mode)),
     })
-    if (!readOnlyRef.current && mode !== 'markdown') {
-      queueMicrotask(() => normalizeJson(view))
-    }
   }, [mode])
 
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
     const current = view.state.doc.toString()
+    if (view.hasFocus) return
     if (current !== value) {
       view.dispatch({ changes: { from: 0, to: current.length, insert: value } })
     }

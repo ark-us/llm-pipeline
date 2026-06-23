@@ -1,3 +1,5 @@
+import { parseFencedContent, stringifyFencedContent } from './fenced-content'
+
 export type CsvTable = {
   headers: string[]
   rows: string[][]
@@ -12,6 +14,8 @@ export function csvFence(source: string): "'''" | '```' | null {
 
 export function unwrapCsv(source: string) {
   const trimmed = source.trim()
+  const typed = parseFencedContent(trimmed)
+  if (typed?.kind === 'csv') return typed.content
   const fence = csvFence(trimmed)
   if (!fence) return trimmed
   return trimmed
@@ -64,7 +68,8 @@ export function isCsvText(source: string) {
 }
 
 export function isFencedCsvText(source: string) {
-  return Boolean(csvFence(source)) && isCsvText(source)
+  const fenced = parseFencedContent(source)
+  return fenced?.kind === 'csv' && isCsvText(source)
 }
 
 function escapeCsvField(value: string) {
@@ -78,7 +83,9 @@ export function stringifyCsv(table: CsvTable) {
 }
 
 export function stringifyCsvValue(source: string, table: CsvTable) {
+  const typed = parseFencedContent(source)
   const fence = csvFence(source)
   const csv = stringifyCsv(table)
+  if (typed?.kind === 'csv') return stringifyFencedContent('csv', csv)
   return fence ? `${fence}${csv}${fence}` : csv
 }
