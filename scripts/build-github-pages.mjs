@@ -19,6 +19,7 @@ const excludedRoots = new Set([
   '.playwright',
   'node_modules',
   'out',
+  'site',
 ])
 
 function copyProject() {
@@ -62,9 +63,10 @@ try {
   if (result.status !== 0) process.exitCode = result.status ?? 1
 
   if (result.status === 0) {
-    const output = path.join(root, 'out')
+    const output = path.join(root, 'site')
     rmSync(output, { recursive: true, force: true })
     cpSync(path.join(temporaryRoot, 'out'), output, { recursive: true })
+    rmSync(path.join(output, '.DS_Store'), { force: true })
     writeFileSync(path.join(output, '.nojekyll'), '')
     console.log(`GitHub Pages export written to ${output}`)
   }

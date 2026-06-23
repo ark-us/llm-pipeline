@@ -73,4 +73,5 @@ To test the same export locally:
 npm run build:pages
 ```
 
-The generated site is written to `out/`.
+The generated site is written to `site/`. This is the directory uploaded and served by
+the GitHub Pages workflow.

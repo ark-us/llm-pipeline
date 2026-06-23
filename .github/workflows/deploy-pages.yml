@@ -40,7 +40,7 @@ jobs:
       - name: Upload static site
         uses: actions/upload-pages-artifact@v5
         with:
-          path: out
+          path: site
           include-hidden-files: true
 
   deploy:
