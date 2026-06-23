@@ -24,6 +24,20 @@ import JsonGraphDiagram, { DiagramMetadata } from './JsonGraphDiagram'
 import MarkdownLiveEditor from './MarkdownLiveEditor'
 import CsvSpreadsheet from './CsvSpreadsheet'
 import FormulaEditor, { FormulaEditorHandle } from './FormulaEditor'
+import SettingsOverlay, {
+  AppSettings,
+} from './SettingsOverlay'
+import {
+  getGoogleAccountEmail,
+  loadGoogleDriveDocument,
+  requestGoogleDriveToken,
+  revokeGoogleToken,
+  saveGoogleDriveDocument,
+} from '@/lib/google-drive'
+import {
+  checkPlaywrightSession,
+  runConfiguredPrompt,
+} from '@/lib/ai-client'
 
 type GraphNode = {
   id: string
@@ -73,6 +87,18 @@ const COMPACT_ZOOM = 0.48
 const TITLE_HEIGHT = 42
 const COMPACT_HEIGHT = 66
 const GRAPH_STORAGE_KEY = 'llm-pipeline.graph.v1'
+const SETTINGS_STORAGE_KEY = 'llm-pipeline.settings.v1'
+const OPENAI_API_KEY_STORAGE_KEY = 'llm-pipeline.openai-api-key.v1'
+const REMOTE_PLAYWRIGHT_TOKEN_STORAGE_KEY = 'llm-pipeline.remote-playwright-token.v1'
+const DEFAULT_SETTINGS: AppSettings = {
+  storageProvider: 'local',
+  aiProvider: 'local-playwright',
+  openAiModel: 'gpt-5.5',
+  remotePlaywrightUrl: '',
+  googleClientId: '',
+  googleDriveFileId: '',
+  googleDriveFileName: 'Pipeline.llm-pipeline.json',
+}
 const STARTING_NODES: GraphNode[] = [
   {
     id: 'source',
@@ -461,10 +487,88 @@ export default function CanvasBoard() {
     status: 'running' | 'login_required' | 'error'
     message?: string
   } | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS)
+  const [settingsReady, setSettingsReady] = useState(false)
+  const [chatGptStatus, setChatGptStatus] = useState<
+    'checking' | 'connected' | 'login_required' | 'disconnected' | 'error'
+  >('disconnected')
+  const [chatGptMessage, setChatGptMessage] = useState('')
+  const [openAiApiKey, setOpenAiApiKey] = useState('')
+  const [remotePlaywrightToken, setRemotePlaywrightToken] = useState('')
+  const [googleAccessToken, setGoogleAccessToken] = useState('')
+  const [googleEmail, setGoogleEmail] = useState('')
+  const [googleStatus, setGoogleStatus] = useState<
+    'disconnected' | 'connecting' | 'connected' | 'saving' | 'saved' | 'error'
+  >('disconnected')
+  const [googleMessage, setGoogleMessage] = useState('')
   const evaluations = useMemo(() => evaluateGraphNodes(nodes), [nodes])
   const edges = evaluations.edges
   const selectedError = selectedId ? evaluations.errors.get(selectedId) : undefined
   const selectedNode = nodes.find((node) => node.id === selectedId) ?? null
+  const storedGraphState = useMemo<StoredGraphState>(() => ({
+    version: 4,
+    diagramName,
+    parents,
+    activeParentIndex,
+    nodes,
+    selectedId,
+    transform: {
+      x: transform.x,
+      y: transform.y,
+      k: transform.k,
+    },
+  }), [activeParentIndex, diagramName, nodes, parents, selectedId, transform])
+
+  useEffect(() => {
+    let nextSettings = DEFAULT_SETTINGS
+    try {
+      const stored = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
+      if (stored) {
+        const parsed = JSON.parse(stored) as Partial<AppSettings>
+        nextSettings = {
+          storageProvider: parsed.storageProvider === 'google-drive'
+            ? 'google-drive'
+            : 'local',
+          aiProvider: parsed.aiProvider === 'openai-api'
+            || parsed.aiProvider === 'remote-playwright'
+            ? parsed.aiProvider
+            : 'local-playwright',
+          openAiModel: typeof parsed.openAiModel === 'string' && parsed.openAiModel
+            ? parsed.openAiModel
+            : DEFAULT_SETTINGS.openAiModel,
+          remotePlaywrightUrl: typeof parsed.remotePlaywrightUrl === 'string'
+            ? parsed.remotePlaywrightUrl
+            : '',
+          googleClientId: typeof parsed.googleClientId === 'string'
+            ? parsed.googleClientId
+            : '',
+          googleDriveFileId: typeof parsed.googleDriveFileId === 'string'
+            ? parsed.googleDriveFileId
+            : '',
+          googleDriveFileName: typeof parsed.googleDriveFileName === 'string'
+            && parsed.googleDriveFileName
+            ? parsed.googleDriveFileName
+            : DEFAULT_SETTINGS.googleDriveFileName,
+        }
+      }
+    } catch {
+      window.localStorage.removeItem(SETTINGS_STORAGE_KEY)
+    }
+    queueMicrotask(() => {
+      setSettings(nextSettings)
+      setOpenAiApiKey(window.sessionStorage.getItem(OPENAI_API_KEY_STORAGE_KEY) ?? '')
+      setRemotePlaywrightToken(
+        window.sessionStorage.getItem(REMOTE_PLAYWRIGHT_TOKEN_STORAGE_KEY) ?? '',
+      )
+      setSettingsReady(true)
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!settingsReady) return
+    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+  }, [settings, settingsReady])
 
   useEffect(() => {
     let storedNodes: GraphNode[] | null = null
@@ -564,26 +668,160 @@ export default function CanvasBoard() {
     if (!storageReady) return
     const saveTimer = window.setTimeout(() => {
       try {
-        const state: StoredGraphState = {
-          version: 4,
-          diagramName,
-          parents,
-          activeParentIndex,
-          nodes,
-          selectedId,
-          transform: {
-            x: transform.x,
-            y: transform.y,
-            k: transform.k,
-          },
-        }
-        window.localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(state))
+        window.localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(storedGraphState))
       } catch {
         // Keep the in-memory graph usable when browser storage is unavailable.
       }
     }, 120)
     return () => window.clearTimeout(saveTimer)
-  }, [activeParentIndex, diagramName, nodes, parents, selectedId, storageReady, transform])
+  }, [storageReady, storedGraphState])
+
+  const saveDocumentToGoogleDrive = useCallback(async () => {
+    if (!googleAccessToken) {
+      setGoogleStatus('error')
+      setGoogleMessage('Connect Google Drive before saving.')
+      return
+    }
+    setGoogleStatus('saving')
+    setGoogleMessage('Saving document to Google Drive…')
+    try {
+      const result = await saveGoogleDriveDocument({
+        accessToken: googleAccessToken,
+        fileId: settings.googleDriveFileId || undefined,
+        name: settings.googleDriveFileName || `${diagramName}.llm-pipeline.json`,
+        content: JSON.stringify(storedGraphState, null, 2),
+      })
+      if (result.id !== settings.googleDriveFileId) {
+        setSettings((current) => ({ ...current, googleDriveFileId: result.id }))
+      }
+      setGoogleStatus('saved')
+      setGoogleMessage(`Saved ${result.name} to Google Drive.`)
+    } catch (error) {
+      setGoogleStatus('error')
+      setGoogleMessage(error instanceof Error ? error.message : String(error))
+    }
+  }, [
+    diagramName,
+    googleAccessToken,
+    settings.googleDriveFileId,
+    settings.googleDriveFileName,
+    storedGraphState,
+  ])
+
+  useEffect(() => {
+    if (!storageReady
+      || !settingsReady
+      || settings.storageProvider !== 'google-drive'
+      || !googleAccessToken) {
+      return
+    }
+    const saveTimer = window.setTimeout(() => {
+      void saveDocumentToGoogleDrive()
+    }, 900)
+    return () => window.clearTimeout(saveTimer)
+  }, [
+    googleAccessToken,
+    saveDocumentToGoogleDrive,
+    settings.storageProvider,
+    settingsReady,
+    storageReady,
+  ])
+
+  async function checkChatGptSession(openLogin = false) {
+    if (settings.aiProvider === 'openai-api') {
+      setChatGptStatus(openAiApiKey ? 'connected' : 'disconnected')
+      setChatGptMessage(openAiApiKey
+        ? `OpenAI API key is configured for ${settings.openAiModel}.`
+        : 'Enter an OpenAI API key to run prompts.')
+      return
+    }
+    setChatGptStatus('checking')
+    setChatGptMessage(openLogin ? 'Opening the dedicated Chrome profile…' : 'Checking session…')
+    try {
+      const result = await checkPlaywrightSession({
+        provider: settings.aiProvider,
+        openLogin,
+        remotePlaywrightUrl: settings.remotePlaywrightUrl,
+        remotePlaywrightToken,
+      })
+      setChatGptStatus(
+        result.status === 'connected'
+          || result.status === 'login_required'
+          || result.status === 'disconnected'
+          ? result.status
+          : 'error',
+      )
+      setChatGptMessage(result.message ?? '')
+    } catch (error) {
+      setChatGptStatus('error')
+      setChatGptMessage(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  function openSettings() {
+    setSettingsOpen(true)
+    void checkChatGptSession(false)
+  }
+
+  async function connectGoogleDrive() {
+    if (!settings.googleClientId) return
+    setGoogleStatus('connecting')
+    setGoogleMessage('Waiting for Google account authorization…')
+    try {
+      const token = await requestGoogleDriveToken(settings.googleClientId)
+      const email = await getGoogleAccountEmail(token)
+      setGoogleAccessToken(token)
+      setGoogleEmail(email)
+      setGoogleStatus('connected')
+      setGoogleMessage('Google Drive is connected for this browser session.')
+    } catch (error) {
+      setGoogleStatus('error')
+      setGoogleMessage(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  async function disconnectGoogleDrive() {
+    if (googleAccessToken) await revokeGoogleToken(googleAccessToken)
+    setGoogleAccessToken('')
+    setGoogleEmail('')
+    setGoogleStatus('disconnected')
+    setGoogleMessage('Google Drive is disconnected.')
+    setSettings((current) => ({ ...current, storageProvider: 'local' }))
+  }
+
+  async function loadDocumentFromGoogleDrive() {
+    if (!googleAccessToken || !settings.googleDriveFileId) return
+    setGoogleStatus('connecting')
+    setGoogleMessage('Loading document from Google Drive…')
+    try {
+      const content = await loadGoogleDriveDocument(
+        googleAccessToken,
+        settings.googleDriveFileId,
+      )
+      const parsed: unknown = JSON.parse(content)
+      if (!isStoredGraphState(parsed)) {
+        throw new Error('The selected Drive file is not a valid llm-pipeline document.')
+      }
+      const nextTransform = d3.zoomIdentity
+        .translate(parsed.transform.x, parsed.transform.y)
+        .scale(parsed.transform.k)
+      setDiagramName(parsed.diagramName)
+      setParents(parsed.parents)
+      setActiveParentIndex(parsed.activeParentIndex)
+      setNodes(parsed.nodes.map(migrateStoredNode))
+      setSelectedId(parsed.selectedId)
+      transformRef.current = nextTransform
+      setTransform(nextTransform)
+      const canvas = canvasRef.current
+      const zoom = zoomBehaviorRef.current
+      if (canvas && zoom) d3.select(canvas).call(zoom.transform, nextTransform)
+      setGoogleStatus('connected')
+      setGoogleMessage('Loaded the document from Google Drive.')
+    } catch (error) {
+      setGoogleStatus('error')
+      setGoogleMessage(error instanceof Error ? error.message : String(error))
+    }
+  }
 
   useEffect(() => {
     const captureFormulaCursor = () => {
@@ -864,6 +1102,31 @@ export default function CanvasBoard() {
     }))
   }
 
+  function removeEmptyParent(level: number) {
+    const parent = parents[level]
+    if (!parent || parent.nodes.length > 0) return
+    const childName = level === 0 ? diagramName : parents[level - 1].name
+    formulaOwnerRef.current = null
+    setExpandedParentTarget(null)
+    setNestedParentMetadata(null)
+    setParents((current) => {
+      const removed = current[level]
+      if (!removed || removed.nodes.length > 0) return current
+      return current
+        .map((candidate, index) => index === level + 1
+          ? {
+              ...candidate,
+              nodes: candidate.nodes.map((node) => ({
+                ...node,
+                formula: replaceFormulaSymbol(node.formula, removed.name, childName),
+              })),
+            }
+          : candidate)
+        .filter((_, index) => index !== level)
+    })
+    setActiveParentIndex(level === 0 ? null : level - 1)
+  }
+
   function deleteSelectedNode() {
     if (!selectedId) return
     setNodes((current) => current.filter((node) => node.id !== selectedId))
@@ -949,18 +1212,15 @@ export default function CanvasBoard() {
       if (!call) throw new Error('formula must be (prompt chatgpt <string>)')
       if (call.engine !== 'chatgpt') throw new Error(`unsupported prompt engine '${call.engine}'`)
       setPromptRun({ key, status: 'running' })
-      const response = await fetch('/api/prompt', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ engine: call.engine, prompt: call.prompt }),
+      const result = await runConfiguredPrompt({
+        provider: settings.aiProvider,
+        prompt: call.prompt,
+        openAiApiKey,
+        openAiModel: settings.openAiModel,
+        remotePlaywrightUrl: settings.remotePlaywrightUrl,
+        remotePlaywrightToken,
       })
-      const result = await response.json() as {
-        status?: string
-        text?: string
-        message?: string
-        error?: string
-      }
-      if (response.status === 409 && result.status === 'login_required') {
+      if (result.status === 'login_required') {
         setPromptRun({
           key,
           status: 'login_required',
@@ -968,9 +1228,7 @@ export default function CanvasBoard() {
         })
         return
       }
-      if (!response.ok || typeof result.text !== 'string') {
-        throw new Error(result.error ?? 'ChatGPT prompt failed')
-      }
+      if (typeof result.text !== 'string') throw new Error('AI provider returned no text.')
       if (level === null) {
         updateNode(node.id, { markdown: result.text })
       } else {
@@ -1238,6 +1496,9 @@ export default function CanvasBoard() {
     width: activeParent?.childPosition?.width ?? 420,
     height: activeParent?.childPosition?.height ?? 280,
     canEnter: true,
+    onMoveDown: activeParent?.nodes.length === 0 && activeParentIndex !== null
+      ? () => removeEmptyParent(activeParentIndex)
+      : undefined,
     content: (
       <MarkdownLiveEditor
         label={`${activeChildName} diagram JSON`}
@@ -1465,6 +1726,7 @@ export default function CanvasBoard() {
             const content = parentDiagramJsons[activeParentIndex] ?? activeChildJson
             void copyText(content)
           }}
+          onOpenSettings={openSettings}
           onUp={() => {
             const nextIndex = activeParentIndex + 1
             setParents((current) => {
@@ -1539,6 +1801,7 @@ export default function CanvasBoard() {
         onCopy={() => {
           void copyText(currentDiagramJson)
         }}
+        onOpenSettings={openSettings}
         onUp={() => {
           setParents((current) => current.length > 0 ? current : [{
             id: 'parent-0',
@@ -1860,6 +2123,44 @@ export default function CanvasBoard() {
             onUp={() => setExpandedParentTarget(null)}
           />
         </div>
+      )}
+      {settingsOpen && (
+        <SettingsOverlay
+          settings={settings}
+          chatGptStatus={chatGptStatus}
+          chatGptMessage={chatGptMessage}
+          openAiApiKey={openAiApiKey}
+          remotePlaywrightToken={remotePlaywrightToken}
+          googleStatus={googleStatus}
+          googleMessage={googleMessage}
+          googleEmail={googleEmail}
+          onSettingsChange={(nextSettings) => {
+            if (nextSettings.aiProvider !== settings.aiProvider) {
+              setChatGptStatus('disconnected')
+              setChatGptMessage('')
+            }
+            setSettings(nextSettings)
+          }}
+          onOpenAiApiKeyChange={(value) => {
+            setOpenAiApiKey(value)
+            if (value) window.sessionStorage.setItem(OPENAI_API_KEY_STORAGE_KEY, value)
+            else window.sessionStorage.removeItem(OPENAI_API_KEY_STORAGE_KEY)
+          }}
+          onRemotePlaywrightTokenChange={(value) => {
+            setRemotePlaywrightToken(value)
+            if (value) {
+              window.sessionStorage.setItem(REMOTE_PLAYWRIGHT_TOKEN_STORAGE_KEY, value)
+            } else {
+              window.sessionStorage.removeItem(REMOTE_PLAYWRIGHT_TOKEN_STORAGE_KEY)
+            }
+          }}
+          onChatGptLogin={() => void checkChatGptSession(true)}
+          onGoogleConnect={() => void connectGoogleDrive()}
+          onGoogleDisconnect={() => void disconnectGoogleDrive()}
+          onGoogleSave={() => void saveDocumentToGoogleDrive()}
+          onGoogleLoad={() => void loadDocumentFromGoogleDrive()}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
     </main>
   )

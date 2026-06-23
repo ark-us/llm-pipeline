@@ -332,6 +332,12 @@ export function evaluatePipelineExpression(
       dependencies.add(root)
       let value = resolveSymbol(root)
       for (const segment of path) {
+        if (typeof value === 'string') {
+          const type = classifyPipelineSource(value)
+          if (type === 'object' || type === 'array') {
+            value = inferPipelineValue(value)
+          }
+        }
         if (isObject(value)) {
           if (!(segment in value.entries)) {
             throw new Error(`'${form.name}' not found`)

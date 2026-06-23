@@ -24,6 +24,7 @@ export type DiagramSurfaceNode = {
   content: ReactNode
   canEnter?: boolean
   referencePath?: string
+  onMoveDown?: () => void
 }
 
 export type DiagramSurfaceEdge = {
@@ -52,6 +53,7 @@ type DiagramSurfaceProps = {
   onCopy: () => void
   onEnter?: (id: string) => void
   onReferenceSelect?: (path: string) => boolean
+  onOpenSettings?: () => void
 }
 
 const MIN_WIDTH = 220
@@ -75,6 +77,7 @@ export default function DiagramSurface({
   onCopy,
   onEnter,
   onReferenceSelect,
+  onOpenSettings,
 }: DiagramSurfaceProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const panRef = useRef<{
@@ -327,6 +330,23 @@ export default function DiagramSurface({
                 aria-label={`Edit ${node.title} title`}
                 spellCheck={false}
               />
+              {node.onMoveDown && (
+                <button
+                  type="button"
+                  className="node-move-down-button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    node.onMoveDown?.()
+                  }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  aria-label={`Remove parent diagram above ${node.title}`}
+                  title="Remove parent diagram"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 12.5 12 19l7-6.5M12 5v14" />
+                  </svg>
+                </button>
+              )}
               <div className="node-content">{node.content}</div>
               <button
                 type="button"
@@ -398,6 +418,21 @@ export default function DiagramSurface({
           ))}
         </div>
         <span className="zoom-readout">{Math.round(transform.k * 100)}%</span>
+        {onOpenSettings && (
+          <button
+            type="button"
+            className="settings-toolbar-button"
+            onClick={onOpenSettings}
+            aria-label="Open settings"
+            title="Settings"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .98l-.03.08H10l-.03-.08A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.98-1l-.08-.03V10l.08-.03A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.98l.03-.08H14l.03.08A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 .98 1l.08.03V14l-.08.03a1.7 1.7 0 0 0-.98.97Z" />
+            </svg>
+            <span>Settings</span>
+          </button>
+        )}
       </div>
     </section>
   )

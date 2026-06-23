@@ -33,3 +33,21 @@ A project that uses:
 ## location live
 
 http://localhost:3000/
+
+## AI prompt providers
+
+The Settings overlay supports three execution modes for `(prompt chatgpt ...)`:
+
+- OpenAI API: calls the Responses API from the browser with an API key kept in session storage.
+- Local Playwright: uses this app's local Next.js API routes and dedicated Chrome profile.
+- Remote Playwright: calls a separately hosted copy of the Playwright API routes.
+
+For a remote Playwright service, configure:
+
+```sh
+PLAYWRIGHT_ALLOWED_ORIGINS=https://OWNER.github.io
+PLAYWRIGHT_SERVICE_TOKEN=replace-with-a-long-random-token
+```
+
+Multiple allowed origins can be comma-separated. Enter the same service URL and bearer token
+in Settings on the GitHub Pages frontend.

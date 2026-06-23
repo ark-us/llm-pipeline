@@ -11,5 +11,11 @@ function expandTripleQuotedStrings(source: string) {
 }
 
 export function parsePipelineJson5(source: string): unknown {
-  return JSON5.parse(expandTripleQuotedStrings(source))
+  try {
+    return JSON5.parse(source)
+  } catch (error) {
+    const expanded = expandTripleQuotedStrings(source)
+    if (expanded === source) throw error
+    return JSON5.parse(expanded)
+  }
 }

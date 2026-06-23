@@ -118,6 +118,43 @@ async function findComposer(page: Page) {
   return null
 }
 
+export async function getChatGptSessionStatus() {
+  if (!(await debuggingReady())) {
+    return {
+      status: 'disconnected' as const,
+      message: 'The dedicated ChatGPT browser is not running.',
+    }
+  }
+  const context = await getContext()
+  const page = await getChatPage(context)
+  const composer = await findComposer(page)
+  return composer
+    ? {
+        status: 'connected' as const,
+        message: 'The dedicated Chrome profile is signed in and ready.',
+      }
+    : {
+        status: 'login_required' as const,
+        message: 'Finish signing in to ChatGPT in the opened Chrome window.',
+      }
+}
+
+export async function openChatGptSession() {
+  const context = await getContext()
+  const page = await getChatPage(context)
+  await page.bringToFront()
+  const composer = await findComposer(page)
+  return composer
+    ? {
+        status: 'connected' as const,
+        message: 'The dedicated Chrome profile is signed in and ready.',
+      }
+    : {
+        status: 'login_required' as const,
+        message: 'Finish signing in to ChatGPT, then return here and check the session.',
+      }
+}
+
 export async function runChatGptPrompt(prompt: string) {
   const context = await getContext()
   const page = await getChatPage(context)
