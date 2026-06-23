@@ -14,7 +14,7 @@ import {
   StreamLanguage,
   syntaxHighlighting,
 } from '@codemirror/language'
-import { EditorState } from '@codemirror/state'
+import { Compartment, EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { tags } from '@lezer/highlight'
 
@@ -132,15 +132,22 @@ const formulaTheme = EditorView.theme({
   '.cm-gutters': {
     borderRight: '1px solid var(--line)',
     background: 'var(--surface-soft)',
-    color: 'var(--muted)',
+    color: 'var(--editor-gutter)',
+  },
+  '.cm-lineNumbers .cm-gutterElement': {
+    color: 'var(--editor-gutter)',
+  },
+  '.cm-activeLineGutter': {
+    color: 'var(--ink)',
+    backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
   },
 })
 
 const lispHighlighting = syntaxHighlighting(HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--accent)', fontWeight: '700' },
-  { tag: tags.string, color: '#2f8a61' },
-  { tag: tags.number, color: '#8d62c5' },
-  { tag: tags.bool, color: '#b06a22', fontWeight: '700' },
+  { tag: tags.string, color: 'var(--editor-string)' },
+  { tag: tags.number, color: 'var(--editor-number)' },
+  { tag: tags.bool, color: 'var(--editor-constant)', fontWeight: '700' },
   { tag: tags.comment, color: 'var(--muted)', fontStyle: 'italic' },
   { tag: tags.variableName, color: 'var(--ink)' },
   { tag: tags.bracket, color: 'var(--accent)', fontWeight: '800' },
@@ -159,6 +166,7 @@ const FormulaEditor = forwardRef<FormulaEditorHandle, FormulaEditorProps>(
     const viewRef = useRef<EditorView | null>(null)
     const initialValueRef = useRef(value)
     const initialLabelRef = useRef(label)
+    const darkModeCompartmentRef = useRef(new Compartment())
     const callbacksRef = useRef({ onChange, onFocus, onBlur, onSelectionChange })
 
     useEffect(() => {
@@ -183,6 +191,7 @@ const FormulaEditor = forwardRef<FormulaEditorHandle, FormulaEditorProps>(
 
     useEffect(() => {
       if (!hostRef.current) return
+      const darkQuery = window.matchMedia('(prefers-color-scheme: dark)')
       const state = EditorState.create({
         doc: initialValueRef.current,
         extensions: [
@@ -192,6 +201,7 @@ const FormulaEditor = forwardRef<FormulaEditorHandle, FormulaEditorProps>(
           parenthesisFolding,
           formulaTheme,
           lispHighlighting,
+          darkModeCompartmentRef.current.of(EditorView.darkTheme.of(darkQuery.matches)),
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({
             'aria-label': initialLabelRef.current,
@@ -217,7 +227,16 @@ const FormulaEditor = forwardRef<FormulaEditorHandle, FormulaEditorProps>(
       })
       const view = new EditorView({ state, parent: hostRef.current })
       viewRef.current = view
+      const updateDarkMode = (event: MediaQueryListEvent) => {
+        view.dispatch({
+          effects: darkModeCompartmentRef.current.reconfigure(
+            EditorView.darkTheme.of(event.matches),
+          ),
+        })
+      }
+      darkQuery.addEventListener('change', updateDarkMode)
       return () => {
+        darkQuery.removeEventListener('change', updateDarkMode)
         view.destroy()
         viewRef.current = null
       }

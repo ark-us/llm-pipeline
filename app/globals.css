@@ -27,6 +27,13 @@
   --canvas-ink: #26231f;
   --canvas-muted: #8a847b;
   --canvas-accent: #ed6a3a;
+  --editor-gutter: #817a71;
+  --editor-property: #9b3e25;
+  --editor-string: #28764f;
+  --editor-number: #7651a8;
+  --editor-constant: #9a5a19;
+  --editor-keyword: #a44228;
+  --editor-punctuation: #5f5a53;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -56,6 +63,13 @@
     --canvas-ink: #f1ece4;
     --canvas-muted: #9d958c;
     --canvas-accent: #ff7b4a;
+    --editor-gutter: #8f8880;
+    --editor-property: #ff9a79;
+    --editor-string: #74d6a4;
+    --editor-number: #c7a1ff;
+    --editor-constant: #f0b66d;
+    --editor-keyword: #ff9a79;
+    --editor-punctuation: #c2bbb3;
   }
 }
 
@@ -336,13 +350,13 @@ button {
 }
 
 .settings-toolbar-button {
-  display: flex;
-  align-items: center;
-  gap: 7px;
+  display: grid;
+  width: 38px;
+  place-items: center;
   height: 38px;
   border: 1px solid var(--line);
   border-radius: 9px;
-  padding: 0 12px;
+  padding: 0;
   color: var(--primary-ink);
   background: var(--primary);
   font-weight: 700;

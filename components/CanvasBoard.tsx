@@ -1367,6 +1367,11 @@ export default function CanvasBoard() {
           }}
           readOnly={Boolean(expression)}
           mode={editorMode(displayedValue)}
+          referencePathPrefix={node.title}
+          onReferenceSelect={(path) => insertNodeReference({
+            id: `${node.id}:${path}`,
+            title: path,
+          }, null)}
           onShowDiagram={
             editorMode(displayedValue) !== 'markdown'
               ? () => enterJsonDiagram(node, displayedValue)
@@ -1511,6 +1516,11 @@ export default function CanvasBoard() {
         }}
         readOnly
         mode="json"
+        referencePathPrefix={activeChildName}
+        onReferenceSelect={(path) => insertNodeReference({
+          id: `${embeddedNodeId}:${path}`,
+          title: path,
+        }, activeParentIndex)}
         onShowDiagram={() => setActiveParentIndex((index) =>
           index === null || index === 0 ? null : index - 1)}
       />
@@ -1581,6 +1591,11 @@ export default function CanvasBoard() {
           }}
           readOnly={Boolean(expression)}
           mode={editorMode(displayedValue)}
+          referencePathPrefix={node.title}
+          onReferenceSelect={(path) => insertNodeReference({
+            id: `${node.id}:${path}`,
+            title: path,
+          }, activeParentIndex)}
           onShowDiagram={
             editorMode(displayedValue) !== 'markdown'
               ? () => enterParentJsonDiagram(node, displayedValue)

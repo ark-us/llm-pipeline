@@ -259,6 +259,10 @@ export default function DiagramSurface({
                   && event.target.closest('[data-diagram-entry]')) {
                   return
                 }
+                if (event.target instanceof Element
+                  && event.target.closest('[data-json-reference-surface]')) {
+                  return
+                }
                 const referenceTarget = event.target instanceof Element
                   ? event.target.closest<HTMLElement>('[data-reference-path]')
                   : null
@@ -430,7 +434,6 @@ export default function DiagramSurface({
               <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
               <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .98l-.03.08H10l-.03-.08A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.98-1l-.08-.03V10l.08-.03A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.98l.03-.08H14l.03.08A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 .98 1l.08.03V14l-.08.03a1.7 1.7 0 0 0-.98.97Z" />
             </svg>
-            <span>Settings</span>
           </button>
         )}
       </div>
