@@ -1064,14 +1064,7 @@ button {
   height: 100%;
   place-items: center;
   overflow: hidden;
-  background-color: #fff;
-  background-image:
-    linear-gradient(45deg, #d6d6d6 25%, transparent 25%),
-    linear-gradient(-45deg, #d6d6d6 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #d6d6d6 75%),
-    linear-gradient(-45deg, transparent 75%, #d6d6d6 75%);
-  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
-  background-size: 16px 16px;
+  background: var(--surface);
 }
 
 .fenced-image-stage img {
