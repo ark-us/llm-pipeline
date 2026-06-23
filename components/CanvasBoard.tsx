@@ -90,9 +90,10 @@ const GRAPH_STORAGE_KEY = 'llm-pipeline.graph.v1'
 const SETTINGS_STORAGE_KEY = 'llm-pipeline.settings.v1'
 const OPENAI_API_KEY_STORAGE_KEY = 'llm-pipeline.openai-api-key.v1'
 const REMOTE_PLAYWRIGHT_TOKEN_STORAGE_KEY = 'llm-pipeline.remote-playwright-token.v1'
+const STATIC_EXPORT = process.env.NEXT_PUBLIC_STATIC_EXPORT === 'true'
 const DEFAULT_SETTINGS: AppSettings = {
   storageProvider: 'local',
-  aiProvider: 'local-playwright',
+  aiProvider: STATIC_EXPORT ? 'openai-api' : 'local-playwright',
   openAiModel: 'gpt-5.5',
   remotePlaywrightUrl: '',
   googleClientId: '',
@@ -530,10 +531,12 @@ export default function CanvasBoard() {
           storageProvider: parsed.storageProvider === 'google-drive'
             ? 'google-drive'
             : 'local',
-          aiProvider: parsed.aiProvider === 'openai-api'
-            || parsed.aiProvider === 'remote-playwright'
+          aiProvider: parsed.aiProvider === 'remote-playwright'
+            || parsed.aiProvider === 'openai-api'
             ? parsed.aiProvider
-            : 'local-playwright',
+            : STATIC_EXPORT
+              ? 'openai-api'
+              : 'local-playwright',
           openAiModel: typeof parsed.openAiModel === 'string' && parsed.openAiModel
             ? parsed.openAiModel
             : DEFAULT_SETTINGS.openAiModel,

@@ -51,3 +51,26 @@ PLAYWRIGHT_SERVICE_TOKEN=replace-with-a-long-random-token
 
 Multiple allowed origins can be comma-separated. Enter the same service URL and bearer token
 in Settings on the GitHub Pages frontend.
+
+## GitHub Pages deployment
+
+The repository includes `.github/workflows/deploy-pages.yml`. It creates a static Next.js
+export and deploys it whenever `main` is pushed.
+
+1. Create a GitHub repository and push this project.
+2. In the repository, open **Settings → Pages**.
+3. Set **Source** to **GitHub Actions**.
+4. Push `main` or run the **Deploy GitHub Pages** workflow manually.
+
+The build derives the correct base path from `GITHUB_REPOSITORY`, so both project sites
+(`https://OWNER.github.io/REPOSITORY/`) and user sites (`https://OWNER.github.io/`) work.
+The static deployment omits the local Node/Playwright routes. Hosted users can select either
+OpenAI API or Remote Playwright in Settings.
+
+To test the same export locally:
+
+```sh
+npm run build:pages
+```
+
+The generated site is written to `out/`.

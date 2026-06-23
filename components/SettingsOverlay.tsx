@@ -54,6 +54,7 @@ export default function SettingsOverlay({
   onGoogleLoad,
   onClose,
 }: SettingsOverlayProps) {
+  const staticExport = process.env.NEXT_PUBLIC_STATIC_EXPORT === 'true'
   const [chapter, setChapter] = useState<'ai' | 'storage'>('ai')
 
   useEffect(() => {
@@ -113,7 +114,11 @@ export default function SettingsOverlay({
                 <legend>Prompt provider</legend>
                 {([
                   ['openai-api', 'OpenAI API', 'Works on GitHub Pages using your API key.'],
-                  ['local-playwright', 'Local Playwright', 'Uses the Chrome profile on this computer.'],
+                  ...(staticExport ? [] : [[
+                    'local-playwright',
+                    'Local Playwright',
+                    'Uses the Chrome profile on this computer.',
+                  ] as const]),
                   ['remote-playwright', 'Remote Playwright', 'Calls a separately hosted Playwright service.'],
                 ] as const).map(([value, title, detail]) => (
                   <label key={value} className={settings.aiProvider === value ? 'is-selected' : undefined}>
